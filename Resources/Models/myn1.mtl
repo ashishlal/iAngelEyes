@@ -1,0 +1,46 @@
+# Blender3D MTL File: 
+# Material Count: 4
+newmtl Texture2.001_face1_sk_face1_skin_hi.jpg
+Ns 9.803922
+Ka 0.000000 0.000000 0.000000
+Kd 0.286720 0.286720 0.286720
+Ks 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd face1_skin_hi.jpg
+
+
+newmtl Texture3.001_face1_sk_face1_skin_lo.jpg
+Ns 9.803922
+Ka 0.000000 0.000000 0.000000
+Kd 0.286720 0.286720 0.286720
+Ks 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd face1_skin_lo.jpg
+
+
+newmtl Texture5.001_face1_so_face1_sock.jpg
+Ns 9.803922
+Ka 0.000000 0.000000 0.000000
+Kd 0.286720 0.286720 0.286720
+Ks 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd face1_sock.jpg
+
+
+newmtl Texture4.001_face1_sk_face1_skin_med.jpg
+Ns 9.803922
+Ka 0.000000 0.000000 0.000000
+Kd 0.286720 0.286720 0.286720
+Ks 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd face1_skin_med.jpg
+
+

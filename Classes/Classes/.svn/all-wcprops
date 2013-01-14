@@ -1,0 +1,161 @@
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes
+END
+CategoriesViewController.m
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/54/trunk/eponyms-touch/Classes/CategoriesViewController.m
+END
+TouchTableView.m
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/52/trunk/eponyms-touch/Classes/TouchTableView.m
+END
+PPHintableLabel.m
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/PPHintableLabel.m
+END
+EponymUpdater.h
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/35/trunk/eponyms-touch/Classes/EponymUpdater.h
+END
+eponyms_touchAppDelegate.m
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/eponyms_touchAppDelegate.m
+END
+PPHintView.h
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/PPHintView.h
+END
+MCTextView.h
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/53/trunk/eponyms-touch/Classes/MCTextView.h
+END
+PPHintViewContainer.h
+K 25
+svn:wc:ra_dav:version-url
+V 66
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/PPHintViewContainer.h
+END
+EponymUpdater.m
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/53/trunk/eponyms-touch/Classes/EponymUpdater.m
+END
+PPHintView.m
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/PPHintView.m
+END
+MCTextView.m
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/MCTextView.m
+END
+PPHintViewContainer.m
+K 25
+svn:wc:ra_dav:version-url
+V 66
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/PPHintViewContainer.m
+END
+EponymCategory.h
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/21/trunk/eponyms-touch/Classes/EponymCategory.h
+END
+EponymViewController.h
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/EponymViewController.h
+END
+Eponym.h
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/54/trunk/eponyms-touch/Classes/Eponym.h
+END
+EponymCategory.m
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/53/trunk/eponyms-touch/Classes/EponymCategory.m
+END
+ListViewController.h
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/svn/!svn/ver/52/trunk/eponyms-touch/Classes/ListViewController.h
+END
+EponymViewController.m
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/EponymViewController.m
+END
+Eponym.m
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/54/trunk/eponyms-touch/Classes/Eponym.m
+END
+ListViewController.m
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/svn/!svn/ver/53/trunk/eponyms-touch/Classes/ListViewController.m
+END
+TouchTableViewDelegate.h
+K 25
+svn:wc:ra_dav:version-url
+V 69
+/svn/!svn/ver/21/trunk/eponyms-touch/Classes/TouchTableViewDelegate.h
+END
+CategoriesViewController.h
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/24/trunk/eponyms-touch/Classes/CategoriesViewController.h
+END
+TouchTableView.h
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/52/trunk/eponyms-touch/Classes/TouchTableView.h
+END
+PPHintableLabel.h
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/!svn/ver/55/trunk/eponyms-touch/Classes/PPHintableLabel.h
+END
+EponymUpdaterDelegate.h
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/!svn/ver/23/trunk/eponyms-touch/Classes/EponymUpdaterDelegate.h
+END
+eponyms_touchAppDelegate.h
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/53/trunk/eponyms-touch/Classes/eponyms_touchAppDelegate.h
+END

@@ -1,0 +1,13 @@
+# Blender3D MTL File: 
+# Material Count: 1
+newmtl Texture2_euro-nose-av_euro-nose-avg-1_skin_
+Ns 15.686275
+Ka 0.000000 0.000000 0.000000
+Kd 0.448000 0.448000 0.448000
+Ks 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd euro-nose-avg-1_skin_hi.jpg
+
+

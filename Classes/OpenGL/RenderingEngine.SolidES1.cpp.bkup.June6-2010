@@ -1,0 +1,927 @@
+#include <OpenGLES/ES1/gl.h>
+#include <OpenGLES/ES1/glext.h>
+#include "Interfaces.hpp"
+#include "Matrix.hpp"
+#include <iostream.h>
+#import <QuartzCore/QuartzCore.h>
+#import "ConstansAndMacros.h"
+
+namespace SolidES1 {
+	
+struct Drawable {
+    GLuint VertexBuffer;
+    GLuint IndexBuffer;
+    int IndexCount;
+};
+
+struct DrawableTexture {
+	vector<GLuint> VertexBuffer;
+	GLuint IndexBuffer;
+	int IndexCount;
+};
+
+	
+class RenderingEngine : public IRenderingEngine {
+public:
+    RenderingEngine();
+	RenderingEngine(IResourceManager* resourceManager);
+    void Initialize(const vector<ISurface*>& surfaces);
+	void InitializeBoundingSphere(ISurface *s, int index);
+	void InitializeMY(const vector<ISurface*>& surfaces);
+    void Render(const vector<Visual>& visuals) ;
+	void RenderMY(const vector<Visual>& visuals) ;
+	bool PresentBuffer() {return m_presentBuffer;}
+	void SetNoseTextureData(void *dat, int w, int h);
+	void SetNoseTextureData1(GLuint tex) ;
+	void SetMatProperty(int p, float value);
+private:
+	bool m_presentBuffer;
+	vector<vec4> m_surfaceBoundingSphere;
+    vector<Drawable> m_drawables;
+	vector<DrawableTexture> m_drawablesT;
+	vector<Group *>		m_groups[SurfaceCount];
+	vec3 *m_vertices[SurfaceCount];
+	vec3 *m_vertexNormals[SurfaceCount];
+	vec3 *m_surfaceNormals[SurfaceCount];
+	unsigned int m_numberOfVertices[SurfaceCount];
+	float *m_textureCoords[SurfaceCount];
+	unsigned int m_valuesPerCoord[SurfaceCount];
+	unsigned int m_textureCoordsCount[SurfaceCount];
+	GLuint m_frameBuffer;
+    GLuint m_colorRenderbuffer;
+    GLuint m_depthRenderbuffer;
+	GLuint m_depthStencil;
+	GLint m_backingWidth;
+	GLint m_backingHeight;
+    mat4 m_translation;
+	void *imageData;
+	int imageWidth;
+	int imageHeight;
+	vec4 m_ambient;
+	vec4 m_diffuse;
+	vec4 m_specular;
+	float m_shininess;
+	int m_matPropertyEnabled;
+	int m_varyAlpha;
+	IResourceManager* m_resourceManager;
+};
+    
+IRenderingEngine* CreateRenderingEngine()
+{
+    return new RenderingEngine();
+}
+
+IRenderingEngine* CreateRenderingEngine(IResourceManager* resourceManager)
+{
+	return new RenderingEngine(resourceManager);
+}
+	
+RenderingEngine::RenderingEngine()
+{
+    glGenRenderbuffersOES(1, &m_colorRenderbuffer);
+    glBindRenderbufferOES(GL_RENDERBUFFER_OES, m_colorRenderbuffer);
+}
+
+RenderingEngine::RenderingEngine(IResourceManager* resourceManager)
+{
+	m_resourceManager = resourceManager;
+	glGenFramebuffersOES(1, &m_frameBuffer);
+	glBindFramebufferOES(GL_FRAMEBUFFER_OES, m_frameBuffer);
+	glGenRenderbuffersOES(1, &m_colorRenderbuffer);
+	glBindRenderbufferOES(GL_RENDERBUFFER_OES, m_colorRenderbuffer);
+	
+	m_ambient		= vec4(0.2, 0.2, 0.2, 1.0);
+	m_diffuse		= vec4(1.0, 1.0, 1.0, 1.0);
+	m_specular		= vec4(1.0, 1.0, 1.0, 1.0);
+	m_shininess		= 0.0;
+	
+	m_matPropertyEnabled = FALSE;
+	m_varyAlpha = TRUE;
+	
+}
+	
+void RenderingEngine::Initialize(const vector<ISurface*>& surfaces)
+{
+    vector<ISurface*>::const_iterator surface;
+    for (surface = surfaces.begin(); surface != surfaces.end(); ++surface) {
+        
+        // Create the VBO for the vertices.
+        vector<float> vertices;
+        (*surface)->GenerateVertices(vertices, VertexFlagsNormals);
+        GLuint vertexBuffer;
+        glGenBuffers(1, &vertexBuffer);
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER,
+                     vertices.size() * sizeof(vertices[0]),
+					 &vertices[0],
+                     GL_STATIC_DRAW);
+        
+		vec4 sphere = (*surface)->GetBoundingSphere();
+		m_surfaceBoundingSphere.push_back(sphere);
+		
+        // Create a new VBO for the indices if needed.
+        int indexCount = (*surface)->GetTriangleIndexCount();
+        GLuint indexBuffer;
+        if (!m_drawables.empty() && indexCount == m_drawables[0].IndexCount) {
+            indexBuffer = m_drawables[0].IndexBuffer;
+        } else {
+            vector<GLushort> indices(indexCount);
+            (*surface)->GenerateTriangleIndices(indices);
+            glGenBuffers(1, &indexBuffer);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                         indexCount * sizeof(GLushort),
+                         &indices[0],
+                         GL_STATIC_DRAW);
+        }
+        
+        Drawable drawable = { vertexBuffer, indexBuffer, indexCount};
+        m_drawables.push_back(drawable);
+    }
+
+    // Extract width and height from the color buffer.
+    int width, height;
+    glGetRenderbufferParameterivOES(GL_RENDERBUFFER_OES,
+                                    GL_RENDERBUFFER_WIDTH_OES, &width);
+    glGetRenderbufferParameterivOES(GL_RENDERBUFFER_OES,
+                                    GL_RENDERBUFFER_HEIGHT_OES, &height);
+
+    // Create a depth buffer that has the same size as the color buffer.
+    glGenRenderbuffersOES(1, &m_depthRenderbuffer);
+    glBindRenderbufferOES(GL_RENDERBUFFER_OES, m_depthRenderbuffer);
+    glRenderbufferStorageOES(GL_RENDERBUFFER_OES, GL_DEPTH_COMPONENT16_OES,
+                             width, height);
+
+    // Create the framebuffer object.
+    GLuint framebuffer;
+    glGenFramebuffersOES(1, &framebuffer);
+    glBindFramebufferOES(GL_FRAMEBUFFER_OES, framebuffer);
+    glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES,
+                                 GL_RENDERBUFFER_OES, m_colorRenderbuffer);
+    glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES,
+                                 GL_RENDERBUFFER_OES, m_depthRenderbuffer);
+    glBindRenderbufferOES(GL_RENDERBUFFER_OES, m_colorRenderbuffer);
+
+    // Set up various GL state.
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_NORMAL_ARRAY);
+#if 1
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+	glEnable(GL_LIGHT1);
+#endif
+    glEnable(GL_DEPTH_TEST);
+
+	GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) ;
+	if(status != GL_FRAMEBUFFER_COMPLETE_OES) {
+		cout << "failed to make complete framebuffer object %x" <<  glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) << endl;
+		//return NO;
+	}
+	
+    // Set up the material properties.
+    //vec4 specular(0.5f, 0.5f, 0.5f, 1);
+   // glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular.Pointer());
+   // glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50.0f);
+	m_presentBuffer = false;
+    m_translation = mat4::Translate(0, 0, -7);
+}
+
+void RenderingEngine::InitializeBoundingSphere(ISurface *surface, int surfaceIndex)
+{
+	vec3	*surfaceNormals;
+	vec3	*vertexNormals;
+	int n = surfaceIndex;
+	unsigned int numberOfFaces=0;
+	
+	surface->GetGroupAndVertices(&m_groups[n], &m_vertices[n], &m_numberOfVertices[n], &numberOfFaces, 
+									&surfaceNormals, &vertexNormals,
+									&m_textureCoords[n], &m_valuesPerCoord[n], &m_textureCoordsCount[n]);
+	m_vertexNormals[n] = vertexNormals;
+	m_surfaceNormals[n] = surfaceNormals;
+	vec4 sphere = surface->GetBoundingSphere();
+	m_surfaceBoundingSphere.push_back(sphere);
+	return;
+	
+}
+	
+void RenderingEngine::InitializeMY(const vector<ISurface*>& surfaces)
+{
+	vector<ISurface*>::const_iterator surface;
+	int n=0;
+	
+	const GLfloat			lightAmbient[] = {0.2, 0.2, 0.2, 1.0};
+	const GLfloat			lightDiffuse[] = {1.0, 1.0, 1.0, 1.0};
+	
+	const GLfloat			lightPosition[] = {5.0, 5.0, 15.0, 0.0}; 
+	const GLfloat			light2Position[] = {-5.0, -5.0, 15.0, 0.0};
+	const GLfloat			lightShininess = 0.0;
+	
+	glShadeModel(GL_SMOOTH); 
+	
+	
+					   
+#if 1
+	glEnable(GL_LIGHTING);
+	glEnable(GL_LIGHT0);
+	glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
+	glLightfv(GL_LIGHT0, GL_POSITION, lightPosition); 
+	glLightfv(GL_LIGHT0, GL_SHININESS, &lightShininess);
+	
+	glEnable(GL_LIGHT1);
+	glLightfv(GL_LIGHT1, GL_AMBIENT, lightAmbient);
+	glLightfv(GL_LIGHT1, GL_DIFFUSE, lightDiffuse);
+	glLightfv(GL_LIGHT1, GL_POSITION, light2Position); 
+	glLightfv(GL_LIGHT1, GL_SHININESS, &lightShininess);
+#endif	
+	
+    
+    for (surface = surfaces.begin(); surface != surfaces.end(); ++surface, n++) {
+        
+		InitializeBoundingSphere(*surface, n);	
+
+		
+#if 1
+	vector<Group *> ::iterator itr;
+	
+	
+	for(itr = m_groups[n].begin(); itr != m_groups[n].end(); itr++) {
+		
+			Group *group = *itr;
+		
+		if(group->oneTexture) {
+			glGenTextures(1, &group->texture[0]);
+			glBindTexture(GL_TEXTURE_2D, group->texture[0]);
+			
+		}
+		else {
+			glGenTextures(1, &group->material->texture->texture[0]);
+			glBindTexture(GL_TEXTURE_2D, group->material->texture->texture[0]);
+
+			//SetNoseTextureData1(group->material->texture->texture[0]) ;		
+		
+#ifdef DEBUG_TEXTURE
+			texUnit++;
+			void* pixels;
+			std::string texFName(group->material->texture->filename);
+			if(!strcmp(group->material->texture->filetype, "jpg")) {
+			
+				//glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);  
+				glGenTextures(1, &group->material->texture->texture[0]);
+				glBindTexture(GL_TEXTURE_2D, group->material->texture->texture[0]);
+			
+				m_resourceManager->LoadJpgImage(texFName);
+		
+				CGImageRef cgimage;
+				m_resourceManager->GetCGIImage((void **)&cgimage);
+				CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+				unsigned int w = CGImageGetWidth(cgimage);
+				unsigned int h = CGImageGetHeight(cgimage);
+				pixels = malloc( h * w * 4 );
+				memset(pixels, 0, h * w * 4);
+				cout << "w = " << w << " h = " << h << endl;
+				CGContextRef context = CGBitmapContextCreate( pixels, w, h, 8, 4 * w, colorSpace, kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big );
+				CGColorSpaceRelease( colorSpace );
+				//CGContextClearRect( context, CGRectMake( 0, 0, w, h ) );
+				//CGContextTranslateCTM( context, 0, h - h );
+				CGContextDrawImage( context, CGRectMake( 0, 0, w, h ), cgimage );
+				glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+				glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST); 
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+				CGContextRelease(context);
+				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, 
+									  group->material->texture->texture[0], 0);
+			
+				// clear texture bind
+				glBindTexture(GL_TEXTURE_2D,0);
+			
+				//glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				//glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			
+				GLuint errorcode = glGetError();
+				if(errorcode != GL_FRAMEBUFFER_COMPLETE_OES) {
+				
+					cout << "err = " << errorcode << endl;
+				
+				}
+				free(pixels);
+				m_resourceManager->UnloadJpgImage();
+			}
+			else if(!strcmp(group->material->texture->filetype, "png")) {
+			
+				glGenTextures(1, &group->material->texture->texture[0]);
+				//glBindTexture(GL_TEXTURE_2D, group->material->texture->texture[0]);
+			
+				continue;
+			
+				void *pixels;
+				unsigned int glcomponent, glformat;
+				int width, height;
+				void *cgimage;
+				texFName.append(".png");
+				cout << "textFname = " << texFName << endl;
+				TextureDescription tex = m_resourceManager->LoadPngImage(texFName);
+				GLenum format;
+				switch (tex.Format) {
+					case TextureFormatGray:      format = GL_LUMINANCE;       break;
+					case TextureFormatGrayAlpha: format = GL_LUMINANCE_ALPHA; break;
+					case TextureFormatRgb:       format = GL_RGB;             break;
+					case TextureFormatRgba:      format = GL_RGBA;            break;
+				}
+			
+				GLenum type;
+				switch (tex.BitsPerComponent) {
+					case 8: type = GL_UNSIGNED_BYTE; break;
+					case 4:
+						if (format == GL_RGBA) {
+							type = GL_UNSIGNED_SHORT_4_4_4_4;
+							break;
+						}
+						// intentionally fall through
+					default:
+						assert(!"Unsupported format.");
+				}
+			
+				pixels = m_resourceManager->GetImageData();
+				m_resourceManager->GetCGIImage(&cgimage);
+				ivec2 size = tex.Size;
+				//m_resourceManager->LoadPngImage(texFName, &cgimage, &pixels, &glcomponent, &glformat, &width, &height);
+				int w = size.x;
+				int h = size.y;
+				int bpp = tex.BitsPerComponent / 2;
+			
+				int byteCount = w * h * bpp;
+				unsigned char* data = (unsigned char*) calloc(byteCount, 1);
+				memset((void *)data, 0, byteCount);
+				CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+				CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big;
+				CGContextRef context = CGBitmapContextCreate(data,
+														 w,
+														 h,
+														 tex.BitsPerComponent,
+														 bpp * tex.Size.x,
+														 colorSpace,
+														 bitmapInfo);
+				CGColorSpaceRelease( colorSpace );
+				CGContextClearRect( context, CGRectMake( 0, 0, w, h ) );
+				//CGContextTranslateCTM( context, 0, h - h );
+				CGContextDrawImage( context, CGRectMake( 0, 0, w, h ), (CGImage *)cgimage );
+				CGContextRelease(context);
+			
+				glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST); 
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				//glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
+				cout << "for = " << format << " type = " << type << endl;
+				glTexImage2D(GL_TEXTURE_2D, 0, format, size.x, size.y, 0, format, type, data);
+				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, 
+										group->material->texture->texture[0], 0);
+			
+				// clear texture bind
+				glBindTexture(GL_TEXTURE_2D,0);
+				GLuint errorcode = glGetError();
+				if(errorcode != GL_FRAMEBUFFER_COMPLETE_OES) {
+				
+					cout << "err = " << errorcode << endl;
+				
+				}
+				free(data);
+				m_resourceManager->UnloadImage();
+				//}
+			}
+			else if(!strcmp(group->material->texture->filetype, "ppng")) {
+			
+				//glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);  
+				glGenTextures(1, &group->material->texture->texture[0]);
+				glBindTexture(GL_TEXTURE_2D, group->material->texture->texture[0]);
+			
+				void *pixels;
+				unsigned int glcomponent, glformat;
+				int width, height;
+				void *cgimage;
+				m_resourceManager->LoadPpngImage(texFName, &cgimage, &pixels, &glcomponent, &glformat, &width, &height);
+				int w = width;
+				int h = height;
+				CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+				CGContextRef context = CGBitmapContextCreate( pixels, w, h, 8, 4 * w, colorSpace, kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big );
+				CGColorSpaceRelease( colorSpace );
+				CGContextClearRect( context, CGRectMake( 0, 0, w, h ) );
+				CGContextTranslateCTM( context, 0, h - h );
+				CGContextDrawImage( context, CGRectMake( 0, 0, w, h ), (CGImage *)cgimage );
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+				cout << " c = " << glcomponent << " f = " << glformat << endl;
+				//glTexImage2D(GL_TEXTURE_2D, 0, glcomponent, width, height, 0, glformat, GL_UNSIGNED_BYTE, pixels);
+				CGContextRelease(context);
+				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, 
+									  group->material->texture->texture[0], 0);
+			
+				// clear texture bind
+				glBindTexture(GL_TEXTURE_2D,0);
+				glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glEnable(GL_TEXTURE_2D);
+				GLuint errorcode = glGetError();
+				if(errorcode != GL_FRAMEBUFFER_COMPLETE_OES) {
+				
+					cout << "err = " << errorcode << endl;
+				
+				}
+				m_resourceManager->UnloadImage();
+			}
+#endif		
+		}
+		
+	}
+#endif
+	}
+
+
+		// Extract width and height from the color buffer.
+		glGetRenderbufferParameterivOES(GL_RENDERBUFFER_OES,
+										GL_RENDERBUFFER_WIDTH_OES, &m_backingWidth);
+		glGetRenderbufferParameterivOES(GL_RENDERBUFFER_OES,
+										GL_RENDERBUFFER_HEIGHT_OES, &m_backingHeight);
+		
+		// Create a depth buffer that has the same size as the color buffer.
+		glGenRenderbuffersOES(1, &m_depthRenderbuffer);
+		glBindRenderbufferOES(GL_RENDERBUFFER_OES, m_depthRenderbuffer);
+		glRenderbufferStorageOES(GL_RENDERBUFFER_OES, GL_DEPTH_COMPONENT16_OES,
+								 m_backingWidth, m_backingHeight);
+				
+		 glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES,
+		                             GL_RENDERBUFFER_OES, m_colorRenderbuffer);
+		glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES,
+									 GL_RENDERBUFFER_OES, m_depthRenderbuffer);
+		//glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES,
+		//						 GL_RENDERBUFFER_OES, m_depthStencil);
+		//glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_STENCIL_ATTACHMENT_OES,
+		//						 GL_RENDERBUFFER_OES, m_depthStencil);
+		 glBindRenderbufferOES(GL_RENDERBUFFER_OES, m_colorRenderbuffer);
+		
+		GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) ;
+		if(status != GL_FRAMEBUFFER_COMPLETE_OES) {
+			cout << "failed to make complete framebuffer object %x" <<  status << endl;
+			//return NO;
+		
+		
+		}
+
+    // Set up various GL state.
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_NORMAL_ARRAY);
+#if 1
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+	glEnable(GL_LIGHT1);
+    glEnable(GL_DEPTH_TEST);
+#endif
+	glEnable(GL_TEXTURE_2D);
+	glEnable(GL_BLEND);
+	
+	// Set up the material properties.
+    //vec4 specular(0.5f, 0.5f, 0.5f, 1);
+    //glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular.Pointer());
+    //glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50.0f);
+	
+	m_presentBuffer = false;
+    m_translation = mat4::Translate(0, 0, -7);
+	
+}
+
+
+void RenderingEngine::Render(const vector<Visual>& visuals) 
+{
+	m_presentBuffer=false;
+    //glClearColor(0.5f, 0.5f, 0.5f, 1);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    vector<Visual>::const_iterator visual = visuals.begin();
+    for (int visualIndex = 0; visual != visuals.end(); ++visual, ++visualIndex) {
+        
+		vec4 sphere = m_surfaceBoundingSphere[visualIndex];
+		
+		vec2 screenPos = visual->ScreenPos;
+		if((screenPos.x == -1000.0f) || (screenPos.y == 1000.0f)) continue;
+		
+        // Set the viewport transform.
+        ivec2 size = visual->ViewportSize;
+        ivec2 lowerLeft = visual->LowerLeft;
+		
+		lowerLeft.x = (int)screenPos.x;
+		lowerLeft.y = (int)screenPos.y;
+		//size.x=320 - lowerLeft.x;
+		//size.y=480 - lowerLeft.y;
+		glViewport(lowerLeft.x, lowerLeft.y, size.x, size.y);
+		
+		GLfloat aspect = (float)(size.x)/(float)(size.y);
+		
+        // Set the light position.
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        //vec4 lightPosition(0.25, 0.25, 1, 0);
+        //glLightfv(GL_LIGHT0, GL_POSITION, lightPosition.Pointer());
+        
+        // Set the model-view transform.
+        mat4 rotation = visual->Orientation.ToMatrix();
+		GLfloat h = 4.0f * size.y / size.x;
+		GLfloat diam = 2 * sphere.w;
+#if 1
+		GLfloat left = sphere.x - diam;
+		GLfloat right = sphere.x + diam;
+		GLfloat bottom = sphere.y - diam;
+		GLfloat top = sphere.y + diam;
+#endif
+		GLfloat zNearF = 0.001f;
+		GLfloat zNearO = 1.0f;
+		GLfloat zFarO = zNearO+diam;
+		//GLfloat zFar = 1000.0f;
+		GLfloat zFarF = zNearF+diam;
+		GLfloat rMax = 0.0f;
+		
+        mat4 modelview = rotation * m_translation;
+		mat4 m_translation1 = mat4::Translate(0, 0, -diam);
+		modelview = rotation * m_translation1;
+		
+		
+        glLoadMatrixf(modelview.Pointer());
+		const GLfloat fieldOfView = 45.0;
+		
+		mat4 projection = mat4::Frustum(-2, 2, -h / 2, h / 2, 5, 10);
+		h = 3.669f * ((float)size.y/(float)size.x);
+		GLfloat zoom = 1.0f;
+		
+		double xmin, xmax, ymin, ymax;
+		ymax = zNearF * tanf(fieldOfView * M_PI / 360.0);
+		ymin = -ymax;
+		xmin = ymin * aspect;
+		xmax = ymax * aspect;
+			
+		rMax = (2 *diam) * sin((double)((fieldOfView * M_PI)/180)/2) *2.2;
+		zoom = (float)(diam/2.0f)/rMax;
+
+		projection = mat4::Frustum(xmin * zoom, xmax * zoom, ymin * zoom, ymax * zoom, zNearF, zFarF);
+			
+				
+        //mat4 projection = mat4::Frustum(-2, 2, -h / 2, h / 2, 5.0f, 1000);
+        glMatrixMode(GL_PROJECTION);
+        glLoadMatrixf(projection.Pointer());
+					
+		// Set the diffuse color.
+        vec3 color = visual->Color * 0.75f;
+        vec4 diffuse(color.x, color.y, color.z, 1);
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse.Pointer());
+
+		// +++lal
+		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		m_presentBuffer = true;
+        // Draw the surface.
+        int stride = 2 * sizeof(vec3);
+        const GLvoid* normalOffset = (const GLvoid*) sizeof(vec3);
+        const Drawable& drawable = m_drawables[visualIndex];
+        glBindBuffer(GL_ARRAY_BUFFER, drawable.VertexBuffer);
+        glVertexPointer(3, GL_FLOAT, stride, 0);
+        glNormalPointer(GL_FLOAT, stride, normalOffset);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, drawable.IndexBuffer);
+        glDrawElements(GL_TRIANGLES, drawable.IndexCount, GL_UNSIGNED_SHORT, 0);
+		
+    }
+	
+}
+
+void RenderingEngine::RenderMY(const vector<Visual>& visuals) 
+{
+	m_presentBuffer=false;
+	//glClearColor(0.5f, 0.5f, 0.5f, 1);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+	vector<Visual>::const_iterator visual = visuals.begin();
+	for (int visualIndex = 0; visual != visuals.end(); ++visual, ++visualIndex) {
+			
+		vec4 sphere = m_surfaceBoundingSphere[visualIndex];
+			
+		vec2 screenPos = visual->ScreenPos;
+		if((screenPos.x == -1000.0f) || (screenPos.y == -1000.0f)) continue;
+
+		vector<Group *> ::iterator itr;
+		// Set the viewport transform.
+		ivec2 size = visual->ViewportSize;
+		ivec2 lowerLeft = visual->LowerLeft;
+			
+		lowerLeft.x = (int)screenPos.x;
+		lowerLeft.y = (int)screenPos.y;
+		glViewport(lowerLeft.x, lowerLeft.y, size.x, size.y);
+			
+		GLfloat aspect = (float)(size.x)/(float)(size.y);
+			
+		// Set the light position.
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+		//vec4 lightPosition(0.25, 0.25, 1, 0);
+		//glLightfv(GL_LIGHT0, GL_POSITION, lightPosition.Pointer());
+			
+		// Set the model-view transform.
+		mat4 rotation = visual->Orientation.ToMatrix();
+		
+		GLfloat diam = 2 * sphere.w;
+#if 0
+		GLfloat h = 4.0f * size.y / size.x;
+		GLfloat left = sphere.x - diam;
+		GLfloat right = sphere.x + diam;
+		GLfloat bottom = sphere.y - diam;
+		GLfloat top = sphere.y + diam;
+#endif
+		GLfloat zNearF = 0.001f;
+		GLfloat zNearO = 1.0f;
+		GLfloat zFarO = zNearO+diam;
+		//GLfloat zFar = 1000.0f;
+		GLfloat zFarF = zNearF+diam;
+		GLfloat rMax = 0.0f;
+			
+		mat4 modelview = rotation * m_translation;
+		mat4 m_translation1 = mat4::Translate(0, 0, -diam);
+		modelview = rotation * m_translation1;
+			
+			
+		glLoadMatrixf(modelview.Pointer());
+		const GLfloat fieldOfView = 45.0;
+			
+		//mat4 projection = mat4::Frustum(-2, 2, -h / 2, h / 2, 5, 10);
+		//h = 3.669f * ((float)size.y/(float)size.x);
+		GLfloat zoom = 1.0f;
+			
+		double xmin, xmax, ymin, ymax;
+		ymax = zNearF * tanf(fieldOfView * M_PI / 360.0);
+		ymin = -ymax;
+		xmin = ymin * aspect;
+		xmax = ymax * aspect;
+			
+		//rMax = (2 *diam) * sin((double)((fieldOfView * M_PI)/180)/2) *2.2;
+		rMax = (2 *diam) * sin((double)((fieldOfView * M_PI)/180)/2) * 2.2;
+		zoom = ((float)(diam/2.0f)/rMax) ;
+			
+		mat4 projection = mat4::Frustum(xmin * zoom, xmax * zoom, ymin * zoom, ymax * zoom, zNearF, zFarF);
+			
+		glMatrixMode(GL_PROJECTION);
+		glLoadMatrixf(projection.Pointer());
+			
+				
+		// +++lal
+		//glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		
+		m_presentBuffer = true;
+		// Draw the surface.
+		//int stride = 2 * sizeof(vec3);
+		//const GLvoid* normalOffset = (const GLvoid*) sizeof(vec3);
+		//const DrawableTexture& drawable = m_drawablesT[visualIndex];
+		//for(int i=0; i < drawable.VertexBuffer.size(); i++) {
+		//	glBindBuffer(GL_ARRAY_BUFFER, drawable.VertexBuffer[i]);
+		//}
+		// Enable and load the vertex array
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glEnableClientState(GL_NORMAL_ARRAY);
+		glVertexPointer(3, GL_FLOAT, 0, m_vertices[visualIndex]); 
+		glNormalPointer(GL_FLOAT, 0, m_vertexNormals[visualIndex]);
+		
+		
+		
+		// Loop through each group
+		//vector<Group *> ::iterator itr;
+#if 1
+		//glMatrixMode(GL_TEXTURE);
+		if (m_textureCoords[visualIndex] != NULL)
+		{
+			//glClientActiveTexture(GL_TEXTURE0+texUnit);
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			//m_valuesPerCoord[visualIndex] =2;
+			//cout << "vi = " << visualIndex << " m_valuesPerCoord = " << m_valuesPerCoord[visualIndex] << endl;
+			glTexCoordPointer(m_valuesPerCoord[visualIndex], GL_FLOAT, 0, &m_textureCoords[visualIndex][0]);
+		}
+#endif
+		
+#if 1
+		glEnable(GL_LIGHTING);
+#endif
+		//GLuint textureFrameBuffer;
+		
+		//for(int p=0; p < 2; p++) {
+		for(itr = m_groups[visualIndex].begin(); itr != m_groups[visualIndex].end(); itr++)
+		{
+			
+			Group *group = *itr;
+			
+			if ((!group->oneTexture) && (group->material) && (m_textureCoords[visualIndex] != NULL) && (group->material->texture != NULL)) {
+				
+				//glEnable(GL_TEXTURE_2D);
+				
+				SetNoseTextureData1(group->material->texture->texture[0]);
+				
+				
+				//texUnit++;
+			}
+			else if(group->oneTexture) {
+				
+				SetNoseTextureData1(group->texture[0]);
+			}
+
+			// clear buffers
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			//glColor4f(0.001f, 0.001f, 0.001f, 0.001f);
+			//glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+			GLenum err = glGetError();
+			if (err != GL_NO_ERROR)
+				cout << "Erroraaaaaa. glError: " << err << endl;
+		
+			
+#if 1			
+			
+			if(m_matPropertyEnabled == TRUE) {
+				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (const GLfloat *)&m_ambient);
+				glColor4f(m_diffuse.x, m_diffuse.y, m_diffuse.z, m_diffuse.w);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE,  (const GLfloat *)&m_diffuse);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (const GLfloat *)&m_specular);
+				glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, m_shininess);
+			}
+			
+#endif
+			for (int i=0; i < group->numberOfFaces; i++) {
+				glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, &(group->faces[i]));
+			}
+			//glDrawElements(GL_TRIANGLES, 3*group->numberOfFaces, GL_UNSIGNED_SHORT, &(group->faces[0]));
+			
+			
+			GLenum err1 = glGetError();
+			if (err1 != GL_NO_ERROR)
+				cout << "Error11111111. glError: " << err1 << endl;
+			 glDepthMask(GL_TRUE);
+			
+			//glDisable(GL_TEXTURE_2D);
+		}
+		//}
+		if (m_textureCoords != NULL)
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		
+		glDisableClientState(GL_VERTEX_ARRAY);
+		glDisableClientState(GL_NORMAL_ARRAY);
+			
+	}
+	//glPopMatrix();
+}
+
+void RenderingEngine::SetNoseTextureData(void *dat, int w, int h) 
+{ 
+
+	imageData =dat; 
+	imageWidth =w; 
+	imageHeight=h;
+		
+	return;
+
+	
+}
+
+void RenderingEngine::SetNoseTextureData1(GLuint tex) 
+{ 
+
+	CGImageRef cgimage = (CGImageRef)imageData;
+	int width, height;
+	void *pixels;
+	static unsigned int num=0;
+#if 0	
+	std::string texFName("nosetex.png");
+	
+	unsigned int glcomponent, glformat;
+	
+	m_resourceManager->LoadPngImage(texFName);
+	m_resourceManager->GetCGIImage((void **)&cgimage);
+#endif		
+	int w = CGImageGetWidth((CGImageRef)cgimage);
+	int h = CGImageGetHeight((CGImageRef)cgimage);
+	width = w;
+	height = h;
+	if((!w) || (!h)) return;
+#if 1
+	pixels = malloc( height * width * 4 );
+	memset(pixels, 0, (height * width * 4));
+#else
+	pixels = calloc(1, height * width * 4 );
+#endif
+	CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+	CGContextRef context = CGBitmapContextCreate( pixels, width, height, 8, 4 * width, colorSpace, 
+														 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big );
+	
+#if 0
+	unsigned char* pColor = (unsigned char*) pixels;
+	for (int h = 0; h < height; ++h) {
+		for (int w = 0; w < width; ++w) {
+			unsigned char r = pColor[0];
+			unsigned char g = pColor[1];
+			unsigned char b = pColor[2];
+			unsigned char a = pColor[3];
+			a = a ? a : 255;
+			*pColor++ = r * 255 / a;
+			*pColor++ = g * 255 / a;
+			*pColor++ = b * 255 / a;
+			*pColor++ = a;
+		}
+	}
+#endif
+	
+	CGContextClearRect( context, CGRectMake( 0, 0, width, height ) );
+	//CGContextTranslateCTM( context, 0, h - h );
+	CGContextTranslateCTM(context, 0, height);
+	CGContextScaleCTM(context, 1.0, -1.0);
+	CGContextSetBlendMode(context, kCGBlendModeCopy);
+	CGContextDrawImage( context, CGRectMake( 0, 0, width, height ), (CGImage *)cgimage );
+	//m_resourceManager->UnloadImage();
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);	
+	glBindTexture(GL_TEXTURE_2D, tex);
+#if 0
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE); 
+	glShadeModel(GL_SMOOTH);
+#else
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE); 
+	glShadeModel(GL_SMOOTH);
+	//glShadeModel(GL_FLAT);
+#endif
+	
+		
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	
+	// Enable use of the texture
+	glEnable(GL_TEXTURE_2D);
+	
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	num = (num + 1)%(0xffffff);
+	// Enable blending
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	
+	free(pixels);
+	CGColorSpaceRelease( colorSpace );
+	CGContextRelease(context);
+	return;
+
+		
+}
+
+void RenderingEngine::SetMatProperty(int p, float value) 
+{
+	float alpha = 1.0;
+	float val = (value/100.0f);
+	if(m_varyAlpha) alpha = val;
+	m_matPropertyEnabled = TRUE;
+	switch (p) {
+		case AMBIENT:
+			m_ambient = vec4(val, val, val, alpha);
+			break;
+		case DIFFUSE:
+			m_diffuse = vec4(val, val, val, alpha);
+			break;
+		case SPECULAR:
+			m_specular = vec4(val, val, val, alpha);
+			break;
+		case SHININESS:
+			m_shininess = val;
+			break;
+		case ALPHA:
+			m_varyAlpha = value;
+			break;
+		case NONE: /* RESET */
+			m_matPropertyEnabled = FALSE;
+			m_ambient		= vec4(0.2, 0.2, 0.2, 1.0);
+			m_diffuse		= vec4(1.0, 1.0, 1.0, 1.0);
+			m_specular		= vec4(1.0, 1.0, 1.0, 1.0);
+			m_shininess		= 0.0;			
+			break;
+		default:
+			break;
+	}
+	
+	return;
+}
+
+}

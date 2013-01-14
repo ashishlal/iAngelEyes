@@ -1,0 +1,23 @@
+About Picture Me
+================
+
+Picture Me uses face detection to determine when to snap the iPhone's camera
+shutter.  Once it detects a face it will take a picture.  Perfect for taking
+self-portraits.
+
+Just point the camera at yourself or others and wait for it to vibrate (once
+it finds a face).  Shortly after you feel the phone vibrate it will snap the
+photo. This gives you ample time to steady your hand.
+
+Face detection is accomplished using OpenCV an open source computer 
+vision library.
+
+This code is intented to be a useful resource for learning how to
+do the following::
+
+- Integrate OpenCV into an iPhone app.
+- Manipulating UIImagePickerController (on iPhone OS 2.2.x).
+- Triggering the camera shutter programmatically.
+
+Enjoy!
+Jeremy

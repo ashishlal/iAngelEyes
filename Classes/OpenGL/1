@@ -1,0 +1,403 @@
+Only in .: 1
+Only in /Users/Ashish/Downloads/ModelViewer.ObjViewer/Classes/: AppDelegate.h
+Only in /Users/Ashish/Downloads/ModelViewer.ObjViewer/Classes/: AppDelegate.mm
+diff -rb ./ApplicationEngine.ObjViewer.cpp /Users/Ashish/Downloads/ModelViewer.ObjViewer/Classes/ApplicationEngine.ObjViewer.cpp
+9c9
+< 	static const int SurfaceCount = 4; // 6;
+---
+> 	static const int SurfaceCount = 5; // 6;
+92c92
+< 	//surfaces[4] = new ObjSurface(path + "/myf1.obj", true);
+---
+> 	surfaces[4] = new ObjSurface(path + "/myf1.obj", true);
+Only in .: ConstantsAndMacros.h
+diff -rb ./GLView.h /Users/Ashish/Downloads/ModelViewer.ObjViewer/Classes/GLView.h
+1,8d0
+< //
+< //  GLView.h
+< //  Wavefront OBJ Loader
+< //
+< //  Created by Jeff LaMarche on 12/14/08.
+< //  Copyright Jeff LaMarche Consulting 2008. All rights reserved.
+< //
+< 
+12,45d3
+< #import <OpenGLES/EAGL.h>
+< #import <OpenGLES/ES1/gl.h>
+< #import <OpenGLES/ES1/glext.h>
+< //#import "ConstantsAndMacros.h"
+< 
+< // How many times a second to refresh the screen
+< #define kRenderingFrequency 60.0
+< 
+< // For setting up perspective, define near, far, and angle of view
+< #define kZNear			0.01
+< #define kZFar			1000.0
+< #define kFieldOfView	45.0
+< 
+< #define kGroupIndexVertex 0
+< 
+< // Macros
+< #define DEGREES_TO_RADIANS(__ANGLE__) ((__ANGLE__) / 180.0 * M_PI)
+< 
+< @class CameraController;
+< @interface GLView : UIView
+< {
+< 	@private
+< 	// The pixel dimensions of the backbuffer
+< 	GLint backingWidth;
+< 	GLint backingHeight;
+< 	
+< 	EAGLContext *context;
+< 	GLuint viewRenderbuffer, viewFramebuffer;
+< 	GLuint depthRenderbuffer;
+< 	NSTimer *animationTimer;
+< 	NSTimeInterval animationInterval;
+< 
+< 	CameraController *controller;
+< 	BOOL controllerSetup;
+46a5,6
+> @interface GLView : UIView {
+> @private
+52d11
+< 	
+55,60d13
+< @property(nonatomic, assign) CameraController *controller;
+< @property NSTimeInterval animationInterval;
+< 
+< -(void)startAnimation;
+< -(void)stopAnimation;
+< //-(void)drawView;
+61a15
+> 
+diff -rb ./GLView.mm /Users/Ashish/Downloads/ModelViewer.ObjViewer/Classes/GLView.mm
+1,10d0
+< //
+< //  GLView.m
+< //  Wavefront OBJ Loader
+< //
+< //  Created by Jeff LaMarche on 12/14/08.
+< //  Copyright Jeff LaMarche Consulting 2008. All rights reserved.
+< //
+< 
+< #import <QuartzCore/QuartzCore.h>
+< #import <OpenGLES/EAGLDrawable.h>
+12d1
+< #import "CamController.h"
+15,23d3
+< #if 0
+< @interface GLView (private)
+< 
+< - (id)initGLES;
+< - (BOOL)createFramebuffer;
+< - (void)destroyFramebuffer;
+< 
+< @end
+< #endif
+27d6
+< @synthesize animationInterval;
+33,215d11
+< #if 0
+< -(id)initWithFrame:(CGRect)frame
+< {
+< 	self = [super initWithFrame:frame];
+< 	if(self != nil)
+< 	{
+< 		self = [self initGLES];
+< 	}
+< 	return self;
+< }
+< 
+< - (id)initWithCoder:(NSCoder*)coder
+< {
+< 	if((self = [super initWithCoder:coder]))
+< 	{
+< 		self = [self initGLES];
+< 	}	
+< 	return self;
+< }
+< 
+< -(id)initGLES
+< {
+< 	CAEAGLLayer *eaglLayer = (CAEAGLLayer*) self.layer;
+< 	
+< 	// Configure it so that it is opaque, does not retain the contents of the backbuffer when displayed, and uses RGBA8888 color.
+< 	//eaglLayer.opaque = YES;
+< 	eaglLayer.opaque = NO;
+< 	eaglLayer.drawableProperties = [NSDictionary dictionaryWithObjectsAndKeys:
+< 										[NSNumber numberWithBool:FALSE], 
+< 										kEAGLDrawablePropertyRetainedBacking,
+< 										kEAGLColorFormatRGBA8, 
+< 										kEAGLDrawablePropertyColorFormat,
+< 										nil];
+< 	
+< 	// Create our EAGLContext, and if successful make it current and create our framebuffer.
+< 	context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES1];
+< 	if(!context || ![EAGLContext setCurrentContext:context] || ![self createFramebuffer])
+< 	{
+< 		[self release];
+< 		return nil;
+< 	}
+< 	
+< 	// Default the animation interval to 1/60th of a second.
+< 	animationInterval = 1.0 / kRenderingFrequency;
+< 	return self;
+< }
+< 
+< -(CameraController *)controller
+< {
+< 	return controller;
+< }
+< 
+< -(void)setController:(CameraController *)d
+< {
+< 	controller = d;
+< 	controllerSetup = ![controller respondsToSelector:@selector(setupView:)];
+< }
+< 
+< // If our view is resized, we'll be asked to layout subviews.
+< // This is the perfect opportunity to also update the framebuffer so that it is
+< // the same size as our display area.
+< -(void)layoutSubviews
+< {
+< 	[EAGLContext setCurrentContext:context];
+< 	[self destroyFramebuffer];
+< 	[self createFramebuffer];
+< 	[self drawView];
+< }
+< 
+< - (BOOL)createFramebuffer
+< {
+< 	// Generate IDs for a framebuffer object and a color renderbuffer
+< 	glGenFramebuffersOES(1, &viewFramebuffer);
+< 	glGenRenderbuffersOES(1, &viewRenderbuffer);
+< 	
+< 	glBindFramebufferOES(GL_FRAMEBUFFER_OES, viewFramebuffer);
+< 	glBindRenderbufferOES(GL_RENDERBUFFER_OES, viewRenderbuffer);
+< 	// This call associates the storage for the current render buffer with the EAGLDrawable (our CAEAGLLayer)
+< 	// allowing us to draw into a buffer that will later be rendered to screen whereever the layer is (which corresponds with our view).
+< 	[context renderbufferStorage:GL_RENDERBUFFER_OES fromDrawable:(id<EAGLDrawable>)self.layer];
+< 	glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_RENDERBUFFER_OES, viewRenderbuffer);
+< 	
+< 	glGetRenderbufferParameterivOES(GL_RENDERBUFFER_OES, GL_RENDERBUFFER_WIDTH_OES, &backingWidth);
+< 	glGetRenderbufferParameterivOES(GL_RENDERBUFFER_OES, GL_RENDERBUFFER_HEIGHT_OES, &backingHeight);
+< 	
+< 	// For this sample, we also need a depth buffer, so we'll create and attach one via another renderbuffer.
+< 	glGenRenderbuffersOES(1, &depthRenderbuffer);
+< 	glBindRenderbufferOES(GL_RENDERBUFFER_OES, depthRenderbuffer);
+< 	glRenderbufferStorageOES(GL_RENDERBUFFER_OES, GL_DEPTH_COMPONENT16_OES, backingWidth, backingHeight);
+< 	glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_RENDERBUFFER_OES, depthRenderbuffer);
+< 
+< 	if(glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) != GL_FRAMEBUFFER_COMPLETE_OES)
+< 	{
+< 		NSLog(@"failed to make complete framebuffer object %x", glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES));
+< 		return NO;
+< 	}
+< 	
+< 	return YES;
+< }
+< 
+< // Clean up any buffers we have allocated.
+< - (void)destroyFramebuffer
+< {
+< 	glDeleteFramebuffersOES(1, &viewFramebuffer);
+< 	viewFramebuffer = 0;
+< 	glDeleteRenderbuffersOES(1, &viewRenderbuffer);
+< 	viewRenderbuffer = 0;
+< 	
+< 	if(depthRenderbuffer)
+< 	{
+< 		glDeleteRenderbuffersOES(1, &depthRenderbuffer);
+< 		depthRenderbuffer = 0;
+< 	}
+< }
+< 
+< - (void)startAnimation
+< {
+< 	animationTimer = [NSTimer scheduledTimerWithTimeInterval:animationInterval target:self selector:@selector(drawView) userInfo:nil repeats:YES];
+< }
+< 
+< - (void)stopAnimation
+< {
+< 	[animationTimer invalidate];
+< 	animationTimer = nil;
+< }
+< 
+< - (void)setAnimationInterval:(NSTimeInterval)interval
+< {
+< 	animationInterval = interval;
+< 	
+< 	if(animationTimer)
+< 	{
+< 		[self stopAnimation];
+< 		[self startAnimation];
+< 	}
+< }
+< 
+< // Updates the OpenGL view when the timer fires
+< - (void)drawView
+< {
+< 	// Make sure that you are drawing to the current context
+< 	[EAGLContext setCurrentContext:context];
+< 	
+< 	// If our drawing delegate needs to have the view setup, then call -setupView: and flag that it won't need to be called again.
+< 	if(!controllerSetup)
+< 	{
+< 		[controller setupView:self];
+< 		controllerSetup = YES;
+< 	}
+< 	
+< 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+< 	glBindFramebufferOES(GL_FRAMEBUFFER_OES, viewFramebuffer);
+< 
+< 	// +++lal
+< 	[controller setupPos:self];
+< 	[controller drawView:self];
+< 	
+< 	glBindRenderbufferOES(GL_RENDERBUFFER_OES, viewRenderbuffer);
+< 	[context presentRenderbuffer:GL_RENDERBUFFER_OES];
+< 	
+< 	GLenum err = glGetError();
+< 	if(err)
+< 		NSLog(@"%x error", err);
+< }
+< 
+< // Stop animating and release resources when they are no longer needed.
+< - (void)dealloc
+< {
+< 	[self stopAnimation];
+< 	
+< 	if([EAGLContext currentContext] == context)
+< 	{
+< 		[EAGLContext setCurrentContext:nil];
+< 	}
+< 	
+< 	[context release];
+< 	context = nil;
+< 	
+< 	[super dealloc];
+< }
+< 
+< #else
+< 
+223d18
+< 			
+237,238d31
+< 		//[controller drawView:self];
+< 		
+258c51
+<        // glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+---
+>         
+274d66
+< #if 1
+281,288d72
+<     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+< 
+< 	if(!controllerSetup)
+< 	{
+< //		[controller setupView:self];
+< 		controllerSetup = YES;
+< 	}
+< 	//[controller drawView:self];
+291,300d74
+< #else
+< 	 glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+< 	if(!controllerSetup)
+< 	{
+< 		[controller setupView:self];
+< 		controllerSetup = YES;
+< 	}
+< 	
+< 	[controller drawView:self];
+< #endif
+326,358d99
+< - (void)startAnimation
+< {
+< 	animationTimer = [NSTimer scheduledTimerWithTimeInterval:animationInterval target:self selector:@selector(drawView) userInfo:nil repeats:YES];
+< }
+< 
+< - (void)stopAnimation
+< {
+< 	[animationTimer invalidate];
+< 	animationTimer = nil;
+< }
+< 
+< - (void)setAnimationInterval:(NSTimeInterval)interval
+< {
+< 	animationInterval = interval;
+< 	
+< 	if(animationTimer)
+< 	{
+< 		[self stopAnimation];
+< 		[self startAnimation];
+< 	}
+< }
+< 
+< -(CameraController *)controller
+< {
+< 	return controller;
+< }
+< 
+< -(void)setController:(CameraController *)d
+< {
+< 	controller = d;
+< 	controllerSetup = ![controller respondsToSelector:@selector(setupView:)];
+< }
+< 
+365,368d105
+< 
+< #endif
+< 
+< @end
+Only in .: OpenGLTexture3D.h
+Only in .: OpenGLTexture3D.m
+Only in .: OpenGLWaveFrontGroup.h
+Only in .: OpenGLWaveFrontGroup.m
+Only in .: OpenGLWaveFrontMaterial.h
+Only in .: OpenGLWaveFrontMaterial.m
+Only in .: OpenGLWaveFrontObject.h
+Only in .: OpenGLWaveFrontObject.m
+Only in .: OpengLWaveFrontCommon.h
+diff -rb ./RenderingEngine.SolidES1.cpp /Users/Ashish/Downloads/ModelViewer.ObjViewer/Classes/RenderingEngine.SolidES1.cpp
+113,114c113
+<     //glClearColor(0.5f, 0.5f, 0.5f, 1);
+< 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+---
+>     glClearColor(0.5f, 0.5f, 0.5f, 1);
+142d140
+< #if 1
+147,148d144
+< #endif
+< 		//if(visualIndex ==0) glScalef(100.0f, 100.0f, 100.0f);
+150,151c146
+< 		// +++lal
+< 		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+---
+> 		if(visualIndex ==0) glScalef(100.0f, 100.0f, 100.0f);
+diff -rb ./RenderingEngine.SolidES2.cpp /Users/Ashish/Downloads/ModelViewer.ObjViewer/Classes/RenderingEngine.SolidES2.cpp
+10,11c10,11
+< //#include "../Shaders/SimpleLighting.es2.vert"
+< //#include "../Shaders/SimpleLighting.es2.frag"
+---
+> #include "../Shaders/SimpleLighting.es2.vert"
+> #include "../Shaders/SimpleLighting.es2.frag"
+123d122
+< #if 0
+139c138
+< #endif   
+---
+>     
+158,159c157
+< 	// glClearColor(0.5f, 0.5f, 0.5f, 1);
+< 	 glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+---
+> 	 glClearColor(0.5f, 0.5f, 0.5f, 1);
+211,212c209,210
+<       //  vec3 color = visual->Color * 0.75f;
+<        // glVertexAttrib4f(m_attributes.DiffuseMaterial, color.x, color.y, color.z, 1);
+---
+>         vec3 color = visual->Color * 0.75f;
+>         glVertexAttrib4f(m_attributes.DiffuseMaterial, color.x, color.y, color.z, 1);
+Only in .: gluLookAt.h
+Only in .: gluLookAt.m
